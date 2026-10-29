@@ -1,4 +1,4 @@
-package com.upc.pre.peaceapp.reports.interfaces.rest.resources;
+package com.upc.pre.peaceapp.shared.interfaces.rest;
 
 import org.springframework.data.domain.Page;
 

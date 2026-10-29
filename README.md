@@ -168,11 +168,73 @@ Todos los endpoints piden token. El usuario que reporta sale del token, ya no se
 Notas:
 - `idUser` del reporte es el id del perfil (el mismo `id` de `GET /users/{email}`).
 - Al arrancar contra una base MySQL con datos anteriores, `ddl-auto=update` añade las columnas nuevas, pero los reportes viejos tienen `type` en texto libre y quedan sin `severity`, `status` ni coordenadas válidas. Hay que migrarlos o vaciar la tabla `reports`. La tabla `locations` ya no se usa.
-- Las alertas (`/api/v1/alerts`) siguen igual hasta la Fase 3.
+- Las alertas (`/api/v1/alerts`) se rehicieron en la Fase 3.
 
 ### Fase 3: Alertas y notificaciones
 
-Estado: pendiente.
+Estado: implementada. Rama: `feature/proximity-alert-engine`.
+
+Dos bounded contexts nuevos con las mismas capas que IAM: `alerts/` y `notifications/`. Se comunican por eventos de dominio, sin tocar los repositorios del otro:
+
+1. `POST /reports` publica `ReportCreatedEvent` (después de confirmar la transacción).
+2. `alerts/` busca a los usuarios cuya última ubicación conocida esté dentro de su radio y crea una alerta para cada uno. Publica `AlertGeneratedEvent` por alerta.
+3. `notifications/` convierte la alerta en un aviso dentro de la app y lo envía por push a los dispositivos registrados, respetando las preferencias.
+
+Cada paso corre en su propia transacción: si falla la generación de alertas o el envío, el reporte (o la alerta) ya guardado no se ve afectado; el error queda en el log.
+
+**Reglas de proximidad.** Se alerta a un usuario cuando se cumple todo esto: no es quien reportó, su última ubicación tiene menos de 24 horas, el reporte está dentro de su radio (por defecto 1000 m, de 100 a 20000), la severidad llega a su mínimo, el tipo no está ignorado, no tiene las alertas silenciadas y no tenía ya una alerta por ese reporte (hay a lo sumo una alerta por usuario y reporte). Los reportes que se editan o se mueven después no generan alertas nuevas.
+
+Todos los endpoints piden token y trabajan sobre el usuario del token.
+
+| Método | Ruta | Qué hace | Respuestas |
+|---|---|---|---|
+| PUT | `/api/v1/alerts/settings/location` | Guarda la última ubicación del usuario. El móvil debe enviarla cada cierto tiempo: sin ella no recibe alertas | `200`, `400` |
+| GET | `/api/v1/alerts/settings` | Configuración de alertas (valores por defecto si nunca se guardó) | `200` |
+| PUT | `/api/v1/alerts/settings` | Reemplaza la configuración | `200`, `400` |
+| GET | `/api/v1/alerts` | Mis alertas, paginadas, de más nueva a más vieja. `unread=true` solo las no leídas | `200`, `400` |
+| GET | `/api/v1/alerts/unread-count` | Cantidad de alertas sin leer | `200` |
+| GET | `/api/v1/alerts/{id}` | Una alerta mía | `200`, `403`, `404` |
+| GET | `/api/v1/alerts/user/{userId}` | Alertas de un perfil (id de perfil). Solo el dueño o admin | `200`, `403`, `404` perfil inexistente |
+| PUT | `/api/v1/alerts/{id}/read` | Marca una alerta como leída | `200`, `403`, `404` |
+| PUT | `/api/v1/alerts/read-all` | Marca todas mis alertas como leídas; devuelve `{ "count": N }` | `200` |
+| DELETE | `/api/v1/alerts/{id}` | Borra una alerta mía | `204`, `403`, `404` |
+| DELETE | `/api/v1/alerts` | Borra todas **mis** alertas (ya no borra las de todos) | `204` |
+| GET | `/api/v1/notifications` | Historial de avisos, paginado. `unread=true` solo los no leídos | `200`, `400` |
+| GET | `/api/v1/notifications/unread-count` | Avisos sin leer | `200` |
+| PUT | `/api/v1/notifications/{id}/read` | Marca un aviso como leído | `200`, `403`, `404` |
+| PUT | `/api/v1/notifications/read-all` | Marca todos como leídos | `200` |
+| DELETE | `/api/v1/notifications/{id}` | Borra un aviso | `204`, `403`, `404` |
+| GET | `/api/v1/notifications/preferences` | Canales y tipos de aviso activos | `200` |
+| PUT | `/api/v1/notifications/preferences` | Reemplaza las preferencias | `200`, `400` |
+| POST | `/api/v1/notifications/devices` | Registra el token push del dispositivo. Si el token ya era de otra cuenta, pasa a esta | `201`, `400` |
+| DELETE | `/api/v1/notifications/devices?token=...` | Quita el dispositivo (solo si es del usuario) | `204` |
+
+**Cuerpos de petición**
+
+| Endpoint | Campos |
+|---|---|
+| `PUT /alerts/settings/location` | `latitude` (-90 a 90), `longitude` (-180 a 180), ambos obligatorios |
+| `PUT /alerts/settings` | `radiusMeters` (obligatorio, 100 a 20000), `minSeverity` (obligatorio), `ignoredTypes` (opcional, tipos de reporte), `mutedUntil` (opcional, ISO-8601; si es futura, silencia hasta esa fecha). Es un reemplazo completo: lo que falta se interpreta como "ninguno" |
+| `PUT /notifications/preferences` | `inAppEnabled` y `pushEnabled` (obligatorios), `disabledKinds` (opcional; hoy solo `PROXIMITY_ALERT`). Reemplazo completo |
+| `POST /notifications/devices` | `token` (obligatorio, máx. 512), `platform` (`ANDROID`, `IOS` o `WEB`) |
+
+**Respuesta de una alerta**: `id`, `reportId`, `recipientId`, `title`, `type`, `severity`, `latitude`, `longitude`, `distanceMeters`, `status` (`UNREAD` o `READ`), `createdAt`, `readAt`. Los datos del reporte son una copia de cuando se creó la alerta: el historial no cambia aunque el reporte se edite o se elimine.
+
+**Cambios que rompen compatibilidad con el frontend**
+
+| Antes | Ahora |
+|---|---|
+| `POST /alerts/` creaba una alerta a mano con `location`, `type`, `idUser`... | Eliminado. Las alertas las crea el sistema al publicarse un reporte cercano |
+| `GET /alerts/` devolvía un arreglo con todas las alertas de todos (`204` si no había) | Objeto paginado `{ content, ... }` con las alertas del usuario del token (`200`, también vacío) |
+| `GET /alerts/user/{userId}` devolvía un arreglo sin validar nada | Paginado; solo el dueño o admin; `404` si el perfil no existe |
+| `DELETE /alerts/` borraba todas las alertas de todos y devolvía `200` | Borra solo las del usuario del token y devuelve `204` |
+| Alerta inexistente: `400` | `404` |
+| Campos de la alerta: `location`, `type` (texto), `description`, `idUser`, `imageUrl`, `idReport` | `title`, `type` (enum), `latitude`, `longitude`, `distanceMeters`, `status`, `recipientId`, `reportId` |
+
+Notas:
+- El envío push todavía no llega a un proveedor real: `LoggingPushNotificationSender` solo escribe en el log. Para activar Firebase Cloud Messaging basta con implementar `PushNotificationSender` (puerto en `notifications/application/internal/outboundservices/push`) con un `@Component` que reemplace al de log.
+- Las alertas viven en la tabla nueva `user_alerts`. La tabla `alerts` de las fases anteriores ya no se usa; si tiene datos, no se migran.
+- Las alertas de emergencia enviadas por el usuario y las alertas a contactos de confianza quedan para la Fase 5.
 
 ### Fase 4: Comunidad y confianza
 
