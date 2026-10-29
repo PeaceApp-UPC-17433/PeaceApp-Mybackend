@@ -37,7 +37,7 @@ public class ReportControllerIntegrationTest {
     void whenCreateReport_thenReturnsCreatedReport() throws Exception {
         // 🔹 Arrange
         String email = "reportuser@example.com";
-        String password = "123456";
+        String password = "password123";
         String token = authHelper.registerAndAuthenticateTestUser(email, password);
 
         ReportSchema report = new ReportSchema(
@@ -65,7 +65,7 @@ public class ReportControllerIntegrationTest {
         Report report = new Report("Test Report", "detail", "General", 2L, null, "Avenida Lima");
         reportService.save(report);
 
-        String token = authHelper.registerAndAuthenticateTestUser("reader@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("reader@example.com", "password123");
 
         // 🔹 Act & Assert
         mockMvc.perform(get("/api/v1/reports/")
@@ -78,7 +78,7 @@ public class ReportControllerIntegrationTest {
     void whenGetReportById_thenReturnsReport() throws Exception {
         // 🔹 Arrange
         Report report = reportService.save(new Report("Report By ID", "detail", "Alert", 3L, null, "Calle 9"));
-        String token = authHelper.registerAndAuthenticateTestUser("viewer@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("viewer@example.com", "password123");
 
         // 🔹 Act & Assert
         mockMvc.perform(get("/api/v1/reports/" + report.getId())
@@ -94,7 +94,7 @@ public class ReportControllerIntegrationTest {
         reportService.save(new Report("User Report 1", "detail", "Incident", userId, null, "Z1"));
         reportService.save(new Report("User Report 2", "detail", "Incident", userId, null, "Z2"));
 
-        String token = authHelper.registerAndAuthenticateTestUser("multiuser@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("multiuser@example.com", "password123");
 
         // 🔹 Act & Assert
         mockMvc.perform(get("/api/v1/reports/user/" + userId)
@@ -108,7 +108,7 @@ public class ReportControllerIntegrationTest {
         // 🔹 Arrange
         Report report = reportService.save(new Report("To Delete", "detail", "Trash", 10L, null, "Old Street"));
 
-        String token = authHelper.registerAndAuthenticateTestUser("deleter@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("deleter@example.com", "password123");
 
         // 🔹 Act
         mockMvc.perform(delete("/api/v1/reports/" + report.getId())
