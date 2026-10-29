@@ -116,7 +116,59 @@ Notas:
 
 ### Fase 2: Reportes y mapa
 
-Estado: pendiente.
+Estado: implementada. Rama: `feature/report-domain-expansion`.
+
+Vive en su propio bounded context, `reports/`, con las mismas capas que IAM: `domain` (agregado `Report`, value objects, commands, queries), `application` (servicios de comandos y consultas, ACL hacia usuarios), `infrastructure` (JPA) e `interfaces/rest`. Las coordenadas son parte del reporte (`GeoPoint`); `/locations` quedó como vista de compatibilidad sobre los reportes.
+
+Todos los endpoints piden token. El usuario que reporta sale del token, ya no se envía en el body.
+
+| Método | Ruta | Qué hace | Quién | Respuestas |
+|---|---|---|---|---|
+| POST | `/api/v1/reports` | Crea un reporte (estado `PENDING`) | Cualquier usuario | `201` con `Location`, `400` campos inválidos |
+| GET | `/api/v1/reports` | Lista paginada con filtros | Cualquier usuario | `200`, `400` parámetro inválido |
+| GET | `/api/v1/reports/{id}` | Obtiene un reporte | Cualquier usuario | `200`, `404` |
+| GET | `/api/v1/reports/user/{userId}` | Reportes de un perfil, paginado (equivale a `?userId=`) | Cualquier usuario | `200` |
+| PUT | `/api/v1/reports/{id}` | Edición parcial (también mueve el reporte con `latitude` y `longitude`) | Dueño o admin | `200`, `400`, `403`, `404` |
+| PUT | `/api/v1/reports/{id}/status` | Cambia el estado | Solo admin | `200`, `403`, `404`, `409` transición no permitida |
+| DELETE | `/api/v1/reports/{id}` | Elimina el reporte | Dueño o admin | `204`, `403`, `404` |
+| GET | `/api/v1/reports/map` | Marcadores del área visible, sin datos pesados | Cualquier usuario | `200`, `400` área inválida |
+| GET | `/api/v1/reports/heatmap` | Mapa de calor por cuadrícula con nivel de riesgo | Cualquier usuario | `200`, `400` |
+| POST | `/api/v1/locations` | Compatibilidad: mueve un reporte existente a unas coordenadas | Dueño o admin | `201`, `400`, `403`, `404` |
+| GET | `/api/v1/locations` | Compatibilidad: ubicaciones de los últimos 1000 reportes | Cualquier usuario | `200` |
+| GET | `/api/v1/locations/dangerous?quantity_reports=N` | Compatibilidad: zonas con al menos N reportes activos | Cualquier usuario | `200`, `400` |
+
+**Cuerpo de `POST /reports`**: `title` (obligatorio, máx. 50), `detail` (opcional, máx. 255), `type` (obligatorio), `severity` (opcional, por defecto `MEDIUM`), `occurredAt` (opcional, ISO-8601, por defecto ahora, no puede ser futura), `latitude` (-90 a 90), `longitude` (-180 a 180), `address` (obligatorio, máx. 100), `image` (opcional, máx. 500). `PUT /reports/{id}` acepta los mismos campos, todos opcionales, pero `latitude` y `longitude` deben ir juntas.
+
+**Valores**
+- `type`: `THEFT`, `ACCIDENT`, `LIGHTING`, `HARASSMENT`, `EMERGENCY`, `OTHER`.
+- `severity`: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
+- `status`: `PENDING`, `UNDER_REVIEW`, `VERIFIED`, `DISCARDED`, `RESOLVED`. Transiciones: `PENDING` a `UNDER_REVIEW`, `VERIFIED` o `DISCARDED`; `UNDER_REVIEW` a `VERIFIED` o `DISCARDED`; `VERIFIED` a `RESOLVED` o `DISCARDED`. `DISCARDED` y `RESOLVED` son finales y dejan de contar en el mapa de calor.
+
+**Filtros de `GET /reports`** (combinables): `type`, `severity`, `status`, `from` y `to` (ISO-8601 sobre `occurredAt`), `q` (texto en título, detalle o dirección), `userId`, `mine=true` (reportes del usuario del token). Paginación: `page` (desde 0), `size` (1 a 100, por defecto 20), `sortBy` (`occurredAt` o `createdAt`) y `direction` (`asc` o `desc`). La respuesta es `{ content, page, size, totalElements, totalPages }`.
+
+**Área de `GET /reports/map`**: un rectángulo (`minLat`, `maxLat`, `minLng`, `maxLng`) o un círculo (`lat`, `lng`, `radiusMeters`, máx. 50000), no ambos. Acepta los mismos filtros de tipo, severidad, estado y fechas, más `limit` (1 a 1000, por defecto 500; devuelve los más recientes). Cada punto trae `id`, `latitude`, `longitude`, `type` y `severity`.
+
+**`GET /reports/heatmap`**: parámetros opcionales `minLat`, `maxLat`, `minLng`, `maxLng` (los cuatro o ninguno), `cellSize` en grados (0.0005 a 0.5, por defecto 0.005, unos 550 m) y `minCount` (por defecto 1). Devuelve `{ latitude, longitude, count, riskLevel }` con el centro de cada celda, de más a menos reportes. `riskLevel`: 1-2 reportes `LOW`, 3-5 `MEDIUM`, 6-9 `HIGH`, 10 o más `CRITICAL`.
+
+**Cambios que rompen compatibilidad con el frontend**
+
+| Antes | Ahora |
+|---|---|
+| `POST /reports` con `user_id` en el body | Se ignora; el dueño es el usuario del token |
+| `type` texto libre | Enum (`THEFT`, `ACCIDENT`, ...) |
+| Reporte sin ubicación; ubicación aparte con `POST /locations` | `latitude` y `longitude` obligatorias al crear el reporte |
+| `GET /reports` devolvía un arreglo con todo | Objeto paginado `{ content, ... }` |
+| `GET /reports/user/{userId}` devolvía un arreglo | Objeto paginado |
+| Reporte inexistente: `400` | `404` |
+| Cualquier usuario borraba cualquier reporte | Solo el dueño o un admin |
+| Respuesta con `alatitude` y `alongitude` en ubicaciones | `latitude` y `longitude` |
+| `POST /locations` creaba una ubicación | Mueve el reporte `idReport` (debe existir y ser tuyo) |
+| `GET /locations/dangerous` devolvía todas las ubicaciones | Devuelve celdas `{ latitude, longitude, count, riskLevel }` |
+
+Notas:
+- `idUser` del reporte es el id del perfil (el mismo `id` de `GET /users/{email}`).
+- Al arrancar contra una base MySQL con datos anteriores, `ddl-auto=update` añade las columnas nuevas, pero los reportes viejos tienen `type` en texto libre y quedan sin `severity`, `status` ni coordenadas válidas. Hay que migrarlos o vaciar la tabla `reports`. La tabla `locations` ya no se usa.
+- Las alertas (`/api/v1/alerts`) siguen igual hasta la Fase 3.
 
 ### Fase 3: Alertas y notificaciones
 
