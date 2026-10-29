@@ -27,8 +27,11 @@ public class ReportCommandServiceImpl implements ReportCommandService {
     @Override
     public Report handle(CreateReportCommand command) {
         var reporterId = externalProfileService.fetchProfileIdByEmail(command.requesterEmail());
-        return reportRepository.save(new Report(reporterId, command.title(), command.detail(), command.category(),
+        var report = reportRepository.save(new Report(reporterId, command.title(), command.detail(), command.category(),
                 command.severity(), command.occurredAt(), command.location(), command.address(), command.image()));
+        // El evento necesita el id, por eso se registra después del primer guardado.
+        report.announceCreation();
+        return reportRepository.save(report);
     }
 
     @Override

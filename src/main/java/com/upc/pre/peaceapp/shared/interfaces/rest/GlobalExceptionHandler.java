@@ -3,6 +3,8 @@ package com.upc.pre.peaceapp.shared.interfaces.rest;
 import com.upc.pre.peaceapp.profile.ProfileNotFoundException;
 import com.upc.pre.peaceapp.reports.domain.exceptions.InvalidReportStatusTransitionException;
 import com.upc.pre.peaceapp.reports.domain.exceptions.ReportNotFoundException;
+import com.upc.pre.peaceapp.alerts.domain.exceptions.AlertNotFoundException;
+import com.upc.pre.peaceapp.notifications.domain.exceptions.NotificationNotFoundException;
 import com.upc.pre.peaceapp.security.iam.domain.exceptions.*;
 import com.upc.pre.peaceapp.shared.domain.exceptions.ForbiddenOperationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -44,7 +46,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ErrorResource.of(ex.getMessage()));
     }
 
-    @ExceptionHandler({UserNotFoundException.class, ProfileNotFoundException.class, ReportNotFoundException.class})
+    @ExceptionHandler({UserNotFoundException.class, ProfileNotFoundException.class, ReportNotFoundException.class,
+            AlertNotFoundException.class, NotificationNotFoundException.class})
     public ResponseEntity<ErrorResource> handleNotFound(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResource.of(ex.getMessage()));
     }
