@@ -2,10 +2,10 @@ package com.upc.pre.peaceapp.user;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.upc.pre.peaceapp.config.TestAuthHelper;
-import com.upc.pre.peaceapp.models.UserProfile;
+import com.upc.pre.peaceapp.repositories.UserRepository;
 import com.upc.pre.peaceapp.schemas.UpdateUserProfileSchema;
-import com.upc.pre.peaceapp.schemas.UserProfileSchema;
-import com.upc.pre.peaceapp.services.UserService;
+import com.upc.pre.peaceapp.security.iam.infrastructure.persistence.jpa.repositories.UserIAMRepository;
+import com.upc.pre.peaceapp.security.iam.interfaces.rest.resources.SignInResource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -13,8 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -25,87 +23,135 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 public class UserControllerIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-    @Autowired
-    private ObjectMapper objectMapper;
-    @Autowired
-    private UserService userService;
-    @Autowired
-    private TestAuthHelper authHelper;
+    @Autowired private MockMvc mockMvc;
+    @Autowired private ObjectMapper objectMapper;
+    @Autowired private UserRepository profileRepository;
+    @Autowired private UserIAMRepository iamRepository;
+    @Autowired private TestAuthHelper authHelper;
 
-    @Test
-    void whenCreateUser_thenReturnsUser() throws Exception {
-        // 🔹 Arrange
-        UserProfileSchema newUser = new UserProfileSchema(
-                "John", "Doe", "1234", "john@example.com", "pwrd123", "1", null
-        );
-        String token = authHelper.registerAndAuthenticateTestUser("john@example.com", "password123");
-
-        // 🔹 Act & Assert
-        mockMvc.perform(post("/api/v1/users")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newUser)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("john@example.com"));
+    private Long profileId(String email) {
+        return profileRepository.findByEmail(email).orElseThrow().getId();
     }
 
     @Test
-    void whenGetUserByEmail_thenReturnsUser() throws Exception {
-        // 🔹 Arrange
-        UserProfile user = new UserProfile("Jane", "jane@example.com", "password", "Smith", "999888777", "2", null);
-        userService.save(user);
+    void whenGetOwnProfile_thenReturnsIt() throws Exception {
+        String token = authHelper.registerAndAuthenticateTestUser("jane@example.com", "password123");
 
-        String token = authHelper.registerAndAuthenticateTestUser("jane@example.com", "password");
-
-
-        // 🔹 Act & Assert
-        mockMvc.perform(get("/api/v1/users/jane@example.com")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                )
+        mockMvc.perform(get("/api/v1/users/jane@example.com").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("jane@example.com"));
+                .andExpect(jsonPath("$.email").value("jane@example.com"))
+                .andExpect(jsonPath("$.name").value("Test"));
     }
 
     @Test
-    void whenUpdateUser_thenReturnsUpdatedUser() throws Exception {
-        // 🔹 Arrange
-        UserProfile saved = userService.save(new UserProfile("Tom", "tom@example.com", "pass", "White", "555444333", "3", null));
+    void whenGetUnknownProfile_thenNotFoundJson() throws Exception {
+        String token = authHelper.registerAndAuthenticateTestUser("known@example.com", "password123");
 
-        UpdateUserProfileSchema update = new UpdateUserProfileSchema(
-                "Tommy", "newlastname", "123456789", null
-        );
+        mockMvc.perform(get("/api/v1/users/ghost@example.com").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Perfil no encontrado"));
+    }
 
+    @Test
+    void whenGetAnotherUsersProfile_thenForbidden() throws Exception {
+        authHelper.registerAndAuthenticateTestUser("victim@example.com", "password123");
+        String token = authHelper.registerAndAuthenticateTestUser("attacker@example.com", "password123");
+
+        mockMvc.perform(get("/api/v1/users/victim@example.com").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void whenUpdateOwnProfile_thenFieldsChange() throws Exception {
         String token = authHelper.registerAndAuthenticateTestUser("tom@example.com", "password123");
+        var update = new UpdateUserProfileSchema("Tommy", "White", "123456789", null, null);
 
-        // 🔹 Act & Assert
-        mockMvc.perform(put("/api/v1/users/" + saved.getId())
+        mockMvc.perform(put("/api/v1/users/" + profileId("tom@example.com"))
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(update)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Tommy"));
+                .andExpect(jsonPath("$.name").value("Tommy"))
+                .andExpect(jsonPath("$.lastname").value("White"));
     }
 
     @Test
-    void whenDeleteUser_thenUserIsRemoved() throws Exception {
-        // 🔹 Arrange
-        UserProfile saved = userService.save(new UserProfile("Delete", "del@example.com", "pass", "User", "000111222", "4", null));
+    void whenUpdateAnotherUsersProfile_thenForbidden() throws Exception {
+        authHelper.registerAndAuthenticateTestUser("owner@example.com", "password123");
+        String token = authHelper.registerAndAuthenticateTestUser("intruder@example.com", "password123");
 
-        String token = authHelper.registerAndAuthenticateTestUser("del@example.com", "password123");
-
-        // 🔹 Act
-        mockMvc.perform(delete("/api/v1/users/" + saved.getId())
+        mockMvc.perform(put("/api/v1/users/" + profileId("owner@example.com"))
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                )
-                .andExpect(status().isOk())
-                .andExpect(content().string("User deleted in both tables"));
+                        .content(objectMapper.writeValueAsString(new UpdateUserProfileSchema("Hack", null, null, null, null))))
+                .andExpect(status().isForbidden());
+    }
 
-        // 🔹 Assert
-        Optional<UserProfile> deleted = userService.findOptionalById(saved.getId());
-        assertThat(deleted).isEmpty();
+    @Test
+    void whenUpdateWithInvalidFields_thenFieldErrors() throws Exception {
+        String token = authHelper.registerAndAuthenticateTestUser("valid@example.com", "password123");
+
+        mockMvc.perform(put("/api/v1/users/" + profileId("valid@example.com"))
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateUserProfileSchema(" ", null, "abc", "no-correo", null))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.name").exists())
+                .andExpect(jsonPath("$.errors.phonenumber").exists())
+                .andExpect(jsonPath("$.errors.email").exists());
+    }
+
+    @Test
+    void whenUpdateEmail_thenProfileAndLoginFollow() throws Exception {
+        String token = authHelper.registerAndAuthenticateTestUser("old@example.com", "password123");
+
+        mockMvc.perform(put("/api/v1/users/" + profileId("old@example.com"))
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateUserProfileSchema(null, null, null, "New@Example.com", null))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("new@example.com"));
+
+        assertThat(iamRepository.findByUsername("new@example.com")).isPresent();
+        assertThat(iamRepository.findByUsername("old@example.com")).isEmpty();
+        mockMvc.perform(post("/api/v1/authentication/sign-in")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new SignInResource("new@example.com", "password123"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void whenUpdateEmailToExistingOne_thenConflict() throws Exception {
+        authHelper.registerAndAuthenticateTestUser("taken@example.com", "password123");
+        String token = authHelper.registerAndAuthenticateTestUser("mover@example.com", "password123");
+
+        mockMvc.perform(put("/api/v1/users/" + profileId("mover@example.com"))
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new UpdateUserProfileSchema(null, null, null, "taken@example.com", null))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void whenDeleteOwnAccount_thenProfileAndIdentityAreRemoved() throws Exception {
+        String token = authHelper.registerAndAuthenticateTestUser("del@example.com", "password123");
+        Long id = profileId("del@example.com");
+
+        mockMvc.perform(delete("/api/v1/users/" + id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNoContent());
+
+        assertThat(profileRepository.findById(id)).isEmpty();
+        assertThat(iamRepository.findByUsername("del@example.com")).isEmpty();
+    }
+
+    @Test
+    void whenDeleteAnotherUsersAccount_thenForbiddenAndNothingIsRemoved() throws Exception {
+        authHelper.registerAndAuthenticateTestUser("safe@example.com", "password123");
+        String token = authHelper.registerAndAuthenticateTestUser("evil@example.com", "password123");
+
+        mockMvc.perform(delete("/api/v1/users/" + profileId("safe@example.com")).header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+        assertThat(iamRepository.findByUsername("safe@example.com")).isPresent();
     }
 }

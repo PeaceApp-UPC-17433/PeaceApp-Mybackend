@@ -9,8 +9,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Collections;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -27,11 +25,13 @@ public class TestAuthHelper {
 
     public String registerAndAuthenticateTestUser(String username, String password) throws Exception {
         // 🔹 Sign-up
-        SignUpResource signUp = new SignUpResource(username, password, Collections.singletonList("ROLE_USER"));
-        mockMvc.perform(post("/api/v1/authentication/sign-up")
+        SignUpResource signUp = new SignUpResource(username, password, "Test", "User", "999888777");
+        // Los contextos de test comparten la base H2: si otro test ya registró el correo (409) se reutiliza.
+        int status = mockMvc.perform(post("/api/v1/authentication/sign-up")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(signUp)))
-                .andExpect(status().isCreated());
+                .andReturn().getResponse().getStatus();
+        if (status != 201 && status != 409) throw new AssertionError("Sign-up falló con estado " + status);
 
         // 🔹 Sign-in
         SignInResource signIn = new SignInResource(username, password);

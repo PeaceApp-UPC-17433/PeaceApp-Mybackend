@@ -1,77 +1,49 @@
 package com.upc.pre.peaceapp.controllers;
 
 import com.upc.pre.peaceapp.models.UserProfile;
-import com.upc.pre.peaceapp.schemas.UpdateUserPasswordSchema;
 import com.upc.pre.peaceapp.schemas.UpdateUserProfileSchema;
-import com.upc.pre.peaceapp.schemas.UserProfileSchema;
-import com.upc.pre.peaceapp.security.iam.domain.services.UserIAMCommandService;
+import com.upc.pre.peaceapp.security.iam.domain.model.valueobjects.Roles;
 import com.upc.pre.peaceapp.services.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * La creación de perfiles ocurre en el registro ({@code POST /api/v1/authentication/sign-up}),
+ * por eso aquí no hay POST.
+ */
 @RestController
 @RequestMapping("/api/v1/users")
 @Tag(name = "Users", description = "Users API")
 public class UserController {
     private final UserService userService;
-    private final UserIAMCommandService userIAMCommandService;
 
-    public UserController(UserService userService, UserIAMCommandService userIAMCommandService) {
+    public UserController(UserService userService) {
         this.userService = userService;
-        this.userIAMCommandService = userIAMCommandService;
     }
 
     @GetMapping("/{email}")
-    public ResponseEntity<?> getUserByEmail(@PathVariable String email) {
-        try {
-            UserProfile user = userService.findByEmail(email);
-            if(user == null) {
-                return ResponseEntity.badRequest().body("User not found");
-            }
-            return ResponseEntity.ok(user);
-        } catch(Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteUserByEmail(@PathVariable Long id) {
-        try {
-            userService.deleteById(id);
-            userIAMCommandService.deleteById(id);
-
-            return ResponseEntity.ok("User deleted in both tables");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
-    }
-
-    @PostMapping
-    public ResponseEntity<?> createUser(@RequestBody UserProfileSchema user) {
-        try {
-            UserProfile newUser = new UserProfile(
-                    user.name(),
-                    user.email(),
-                    user.password(),
-                    user.lastname(),
-                    user.phonenumber(),
-                    user.user_id(),
-                    user.profile_image());
-            UserProfile createdUser = userService.save(newUser);
-            return ResponseEntity.ok(createdUser);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<UserProfile> getUserByEmail(@PathVariable String email, Authentication authentication) {
+        return ResponseEntity.ok(userService.findByEmail(email, authentication.getName(), isAdmin(authentication)));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody UpdateUserProfileSchema user) {
-        try {
-            UserProfile updatedUser = userService.update(id, user);
-            return ResponseEntity.ok(updatedUser);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<UserProfile> updateUser(@PathVariable Long id,
+                                                  @Valid @RequestBody UpdateUserProfileSchema user,
+                                                  Authentication authentication) {
+        return ResponseEntity.ok(userService.update(id, user, authentication.getName(), isAdmin(authentication)));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id, Authentication authentication) {
+        userService.delete(id, authentication.getName(), isAdmin(authentication));
+        return ResponseEntity.noContent().build();
+    }
+
+    private static boolean isAdmin(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals(Roles.ROLE_ADMIN.name()));
     }
 }
