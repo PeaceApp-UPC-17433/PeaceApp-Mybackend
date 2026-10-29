@@ -7,8 +7,7 @@ import com.upc.pre.peaceapp.security.iam.interfaces.rest.resources.SignUpResourc
 public class SignUpCommandFromResourceAssembler {
 
     public static SignUpCommand toCommandFromResource(SignUpResource resource) {
-        return new SignUpCommand(resource.username(), resource.password(), resource.roles());
+        return new SignUpCommand(resource.email(), resource.password(), resource.name(), resource.lastname(), resource.phonenumber());
     }
 
 }
-

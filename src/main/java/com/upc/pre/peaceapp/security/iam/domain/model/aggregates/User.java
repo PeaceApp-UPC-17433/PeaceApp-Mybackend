@@ -53,6 +53,14 @@ public class User extends AuditableAbstractAggregateRoot<User> {
 
     }
 
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
+    public void changeUsername(String username) {
+        this.username = username;
+    }
+
     public User addRole(Role role) {
         this.roles.add(role);
         return this;

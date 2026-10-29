@@ -1,6 +1,7 @@
 package com.upc.pre.peaceapp.models;
 
 import com.upc.pre.peaceapp.shared.documentation.models.AuditableAbstractAggregateRoot;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import lombok.Getter;
 import lombok.Setter;
@@ -10,27 +11,24 @@ import lombok.Setter;
 @Entity
 public class UserProfile extends AuditableAbstractAggregateRoot<UserProfile> {
     private String name;
+    @Column(unique = true, nullable = false)
     private String email;
     private String lastname;
     private String phonenumber;
-    private String user_id;
+    /** Id de la cuenta IAM a la que pertenece el perfil (1 a 1). */
+    @Column(unique = true, nullable = false)
+    private Long user_id;
     private String profile_image;
 
     public UserProfile() {
-        this.name = "";
-        this.email = "";
-        this.lastname = "";
-        this.phonenumber = "";
-        this.user_id = "";
-        this.profile_image = "";
     }
 
-    public UserProfile(String name, String email, String password, String lastname, String phonenumber, String user_id, String profile_image) {
+    public UserProfile(String name, String email, String lastname, String phonenumber, Long user_id) {
         this.name = name;
         this.email = email;
         this.lastname = lastname;
-        this.phonenumber = phonenumber;
+        this.phonenumber = phonenumber == null ? "" : phonenumber;
         this.user_id = user_id;
-        this.profile_image = profile_image;
+        this.profile_image = "";
     }
 }

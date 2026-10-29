@@ -1,18 +1,22 @@
 package com.upc.pre.peaceapp.security.iam.domain.services;
 
-
 import com.upc.pre.peaceapp.security.iam.domain.model.aggregates.User;
-import com.upc.pre.peaceapp.security.iam.domain.model.commands.ChangePasswordCommand;
-import com.upc.pre.peaceapp.security.iam.domain.model.commands.SignInCommand;
-import com.upc.pre.peaceapp.security.iam.domain.model.commands.SignUpCommand;
+import com.upc.pre.peaceapp.security.iam.domain.model.commands.*;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 
-import java.util.Optional;
-
 public interface UserIAMCommandService {
-    Optional<User> handle(SignUpCommand command);
-    Optional<User> handle(ChangePasswordCommand command);
-    Optional<ImmutablePair<User, String>> handle(SignInCommand command);
-    // delete user
-    void deleteById(Long id);
+    /** Crea la cuenta y publica {@code UserRegisteredEvent} para que se cree el perfil en la misma transacción. */
+    User handle(SignUpCommand command);
+
+    ImmutablePair<User, String> handle(SignInCommand command);
+
+    void handle(ChangePasswordCommand command);
+
+    void handle(ChangeEmailCommand command);
+
+    void handle(RequestPasswordResetCommand command);
+
+    void handle(ResetPasswordCommand command);
+
+    void handle(DeleteAccountCommand command);
 }
