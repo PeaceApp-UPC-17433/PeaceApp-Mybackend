@@ -33,7 +33,7 @@ public class AlertControllerIntegrationTest {
     @Test
     void whenCreateAlert_thenReturnsCreated() throws Exception {
         // 🔹 Arrange
-        String token = authHelper.registerAndAuthenticateTestUser("alertuser@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("alertuser@example.com", "password123");
 
         AlertSchema alert = new AlertSchema(
                 "Miraflores",
@@ -58,7 +58,7 @@ public class AlertControllerIntegrationTest {
     void whenGetAlertById_thenReturnsAlert() throws Exception {
         // 🔹 Arrange
         Alert alert = alertService.saveAlert(new AlertSchema("San Isidro", "Robbery", "Reported robbery", 2, null, null));
-        String token = authHelper.registerAndAuthenticateTestUser("viewalert@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("viewalert@example.com", "password123");
 
         // 🔹 Act & Assert
         mockMvc.perform(get("/api/v1/alerts/" + alert.getId())
@@ -73,7 +73,7 @@ public class AlertControllerIntegrationTest {
         alertService.saveAlert(new AlertSchema("Lima", "Fire", "Burning building", 99, null, null));
         alertService.saveAlert(new AlertSchema("Lima", "Flood", "Overflow", 99, null, null));
 
-        String token = authHelper.registerAndAuthenticateTestUser("user99@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("user99@example.com", "password123");
 
         // 🔹 Act & Assert
         mockMvc.perform(get("/api/v1/alerts/user/99")
@@ -88,7 +88,7 @@ public class AlertControllerIntegrationTest {
         // 🔹 Arrange
         alertService.saveAlert(new AlertSchema("Callao", "Accident", "Dock collision", 77, null, null));
 
-        String token = authHelper.registerAndAuthenticateTestUser("reader@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("reader@example.com", "password123");
 
         // 🔹 Act & Assert
         mockMvc.perform(get("/api/v1/alerts/")
@@ -101,7 +101,7 @@ public class AlertControllerIntegrationTest {
     void whenDeleteAllAlerts_thenAllAreRemoved() throws Exception {
         // 🔹 Arrange
         alertService.saveAlert(new AlertSchema("Breña", "Warning", "Bridge crack", 15, null, null));
-        String token = authHelper.registerAndAuthenticateTestUser("deleter@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("deleter@example.com", "password123");
 
         // 🔹 Act
         mockMvc.perform(delete("/api/v1/alerts/")

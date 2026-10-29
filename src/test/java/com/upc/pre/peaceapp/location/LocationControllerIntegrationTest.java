@@ -28,7 +28,7 @@ public class LocationControllerIntegrationTest {
     @Test
     void whenCreateLocation_thenReturnsCreated() throws Exception {
         // 🔹 Arrange
-        String token = authHelper.registerAndAuthenticateTestUser("locationuser@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("locationuser@example.com", "password123");
 
         LocationSchema location = new LocationSchema(
                 "-12.0464", "-77.0428", 1L
@@ -47,7 +47,7 @@ public class LocationControllerIntegrationTest {
     @Test
     void whenGetAllLocations_thenReturnsList() throws Exception {
         // 🔹 Arrange
-        String token = authHelper.registerAndAuthenticateTestUser("viewer@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("viewer@example.com", "password123");
 
         // 🔹 Act & Assert
         mockMvc.perform(get("/api/v1/locations/")
@@ -59,7 +59,7 @@ public class LocationControllerIntegrationTest {
     @Test
     void whenGetDangerousLocations_thenReturnsFilteredList() throws Exception {
         // 🔹 Arrange
-        String token = authHelper.registerAndAuthenticateTestUser("filter@example.com", "123456");
+        String token = authHelper.registerAndAuthenticateTestUser("filter@example.com", "password123");
 
         int quantityReports = 1;
 
