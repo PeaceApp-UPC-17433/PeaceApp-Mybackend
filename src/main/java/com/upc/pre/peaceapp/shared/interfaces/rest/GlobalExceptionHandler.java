@@ -1,6 +1,8 @@
 package com.upc.pre.peaceapp.shared.interfaces.rest;
 
 import com.upc.pre.peaceapp.profile.ProfileNotFoundException;
+import com.upc.pre.peaceapp.reports.domain.exceptions.InvalidReportStatusTransitionException;
+import com.upc.pre.peaceapp.reports.domain.exceptions.ReportNotFoundException;
 import com.upc.pre.peaceapp.security.iam.domain.exceptions.*;
 import com.upc.pre.peaceapp.shared.domain.exceptions.ForbiddenOperationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -8,8 +10,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.LinkedHashMap;
 
@@ -40,9 +44,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ErrorResource.of(ex.getMessage()));
     }
 
-    @ExceptionHandler({UserNotFoundException.class, ProfileNotFoundException.class})
+    @ExceptionHandler({UserNotFoundException.class, ProfileNotFoundException.class, ReportNotFoundException.class})
     public ResponseEntity<ErrorResource> handleNotFound(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResource.of(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResource> handleMissingParameter(MissingServletRequestParameterException ex) {
+        return ResponseEntity.badRequest().body(ErrorResource.of("Falta el parámetro " + ex.getParameterName()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResource> handleParameterType(MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.badRequest().body(ErrorResource.of("El parámetro " + ex.getName() + " no es válido"));
+    }
+
+    @ExceptionHandler(InvalidReportStatusTransitionException.class)
+    public ResponseEntity<ErrorResource> handleInvalidTransition(InvalidReportStatusTransitionException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResource.of(ex.getMessage()));
     }
 
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
