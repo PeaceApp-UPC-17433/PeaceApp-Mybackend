@@ -2,8 +2,8 @@ package com.upc.pre.peaceapp.controllers;
 
 import com.upc.pre.peaceapp.models.UserProfile;
 import com.upc.pre.peaceapp.schemas.UpdateUserProfileSchema;
-import com.upc.pre.peaceapp.security.iam.domain.model.valueobjects.Roles;
 import com.upc.pre.peaceapp.services.UserService;
+import com.upc.pre.peaceapp.shared.interfaces.rest.AuthenticatedRequester;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -43,7 +43,6 @@ public class UserController {
     }
 
     private static boolean isAdmin(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals(Roles.ROLE_ADMIN.name()));
+        return AuthenticatedRequester.isAdmin(authentication);
     }
 }

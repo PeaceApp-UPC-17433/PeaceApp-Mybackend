@@ -1,5 +1,8 @@
 package com.upc.pre.peaceapp.config;
 
+import com.upc.pre.peaceapp.security.iam.domain.model.valueobjects.Roles;
+import com.upc.pre.peaceapp.security.iam.infrastructure.persistence.jpa.repositories.RoleRepository;
+import com.upc.pre.peaceapp.security.iam.infrastructure.persistence.jpa.repositories.UserIAMRepository;
 import com.upc.pre.peaceapp.security.iam.interfaces.rest.resources.SignInResource;
 import com.upc.pre.peaceapp.security.iam.interfaces.rest.resources.SignUpResource;
 
@@ -18,9 +21,24 @@ public class TestAuthHelper {
     private final MockMvc mockMvc;
     private final ObjectMapper objectMapper;
 
-    public TestAuthHelper(MockMvc mockMvc, ObjectMapper objectMapper) {
+    private final UserIAMRepository userRepository;
+    private final RoleRepository roleRepository;
+
+    public TestAuthHelper(MockMvc mockMvc, ObjectMapper objectMapper, UserIAMRepository userRepository,
+                          RoleRepository roleRepository) {
         this.mockMvc = mockMvc;
         this.objectMapper = objectMapper;
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+    }
+
+    /** No hay endpoint para crear admins: se registra un usuario normal y se le agrega el rol antes de iniciar sesión. */
+    public String registerAndAuthenticateTestAdmin(String username, String password) throws Exception {
+        registerAndAuthenticateTestUser(username, password);
+        var user = userRepository.findByUsername(username).orElseThrow();
+        user.addRole(roleRepository.findByName(Roles.ROLE_ADMIN).orElseThrow());
+        userRepository.save(user);
+        return registerAndAuthenticateTestUser(username, password);
     }
 
     public String registerAndAuthenticateTestUser(String username, String password) throws Exception {

@@ -70,6 +70,12 @@ public class UserService {
         repository.delete(profile);
     }
 
+    /** Id del perfil asociado a un correo; lo usan otros contextos para identificar a quien actúa. */
+    @Transactional(readOnly = true)
+    public Optional<Long> findProfileIdByEmail(String email) {
+        return repository.findByEmail(EmailAddress.of(email).value()).map(UserProfile::getId);
+    }
+
     @Transactional(readOnly = true)
     public Optional<UserProfile> findOptionalById(Long id) {
         return repository.findById(id);
