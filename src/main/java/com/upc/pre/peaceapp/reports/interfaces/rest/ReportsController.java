@@ -9,6 +9,7 @@ import com.upc.pre.peaceapp.reports.domain.services.ReportQueryService;
 import com.upc.pre.peaceapp.reports.interfaces.rest.resources.*;
 import com.upc.pre.peaceapp.reports.interfaces.rest.transform.*;
 import com.upc.pre.peaceapp.shared.interfaces.rest.AuthenticatedRequester;
+import com.upc.pre.peaceapp.shared.interfaces.rest.PagedResource;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;

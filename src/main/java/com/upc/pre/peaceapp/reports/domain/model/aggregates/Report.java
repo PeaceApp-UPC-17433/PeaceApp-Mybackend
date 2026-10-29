@@ -1,6 +1,7 @@
 package com.upc.pre.peaceapp.reports.domain.model.aggregates;
 
 import com.upc.pre.peaceapp.reports.domain.exceptions.InvalidReportStatusTransitionException;
+import com.upc.pre.peaceapp.reports.domain.model.events.ReportCreatedEvent;
 import com.upc.pre.peaceapp.reports.domain.model.valueobjects.GeoPoint;
 import com.upc.pre.peaceapp.reports.domain.model.valueobjects.ReportCategory;
 import com.upc.pre.peaceapp.reports.domain.model.valueobjects.ReportSeverity;
@@ -77,6 +78,11 @@ public class Report extends AuditableAbstractAggregateRoot<Report> {
         this.location = require(location, "La ubicación");
         this.address = requireText(address, "La dirección", ADDRESS_MAX);
         this.image = optionalText(image, "La imagen", IMAGE_MAX);
+    }
+
+    /** Anuncia la creación. Se llama tras el primer guardado, cuando el reporte ya tiene id. */
+    public void announceCreation() {
+        registerEvent(new ReportCreatedEvent(getId(), reporterId, title, category, severity, location));
     }
 
     /** Edición parcial: un valor nulo deja el campo como está. */
