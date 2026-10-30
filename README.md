@@ -258,6 +258,9 @@ Todos los endpoints piden token. Quien actúa sale del token.
 | PUT | `/api/v1/admin/flags/{id}/resolve` | Resuelve una denuncia | Solo admin | `200`, `400`, `403`, `404`, `409` ya resuelta |
 | GET | `/api/v1/admin/moderation-log` | Historial de acciones de moderación | Solo admin | `200`, `403` |
 | GET | `/api/v1/admin/metrics` | Métricas de calidad | Solo admin | `200`, `403` |
+| GET | `/api/v1/admin/users` | Lista las cuentas con sus roles | Solo admin | `200`, `403` |
+| POST | `/api/v1/admin/users` | Crea una cuenta administrador (`email`, `password`, `name`, `lastname`) | Solo admin | `201`, `400`, `403`, `409` correo repetido |
+| PUT | `/api/v1/admin/users/{id}/role` | Cambia el rol (`{"role": "ROLE_ADMIN"}` o `"ROLE_USER"`) | Solo admin | `200`, `400`, `403`, `404`, `409` último admin |
 
 **Cuerpos de petición**
 
@@ -284,6 +287,7 @@ Todos los endpoints piden token. Quien actúa sale del token.
 |---|---|---|
 | `community.verification.confirmation-threshold` | `3` | Confirmaciones netas que verifican un reporte |
 | `peaceapp.admin.email` / `peaceapp.admin.password` | vacío (variables `ADMIN_EMAIL` y `ADMIN_PASSWORD`) | Si se definen, al arrancar se crea esa cuenta con `ROLE_ADMIN` (y su perfil) cuando no existe. La contraseña necesita al menos 8 caracteres |
+| `peaceapp.bootstrap.first-user-admin` | `true` (variable `BOOTSTRAP_FIRST_ADMIN`) | Si la tabla de usuarios está vacía, el primer sign-up recibe `ROLE_ADMIN`. Quien llegue primero a la URL pública se queda con el sistema: regístrate tú justo después de desplegar, o define `ADMIN_EMAIL`/`ADMIN_PASSWORD`, o ponlo en `false` |
 
 **Cambios que rompen compatibilidad con el frontend**: ninguno. Los endpoints son nuevos y los existentes no cambian.
 

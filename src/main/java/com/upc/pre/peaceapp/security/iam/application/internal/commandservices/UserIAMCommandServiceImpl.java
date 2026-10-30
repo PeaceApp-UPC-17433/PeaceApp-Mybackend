@@ -7,6 +7,7 @@ import com.upc.pre.peaceapp.security.iam.domain.exceptions.*;
 import com.upc.pre.peaceapp.security.iam.domain.model.aggregates.User;
 import com.upc.pre.peaceapp.security.iam.domain.model.commands.*;
 import com.upc.pre.peaceapp.security.iam.domain.model.entities.PasswordResetToken;
+import com.upc.pre.peaceapp.security.iam.domain.model.entities.Role;
 import com.upc.pre.peaceapp.security.iam.domain.model.events.UserRegisteredEvent;
 import com.upc.pre.peaceapp.security.iam.domain.model.valueobjects.EmailAddress;
 import com.upc.pre.peaceapp.security.iam.domain.model.valueobjects.Roles;
@@ -39,6 +40,7 @@ public class UserIAMCommandServiceImpl implements UserIAMCommandService {
     private final PasswordResetNotifier passwordResetNotifier;
     private final ApplicationEventPublisher eventPublisher;
     private final Duration resetTokenTtl;
+    private final boolean firstUserIsAdmin;
 
     public UserIAMCommandServiceImpl(UserIAMRepository userRepository,
                                      RoleRepository roleRepository,
@@ -47,7 +49,8 @@ public class UserIAMCommandServiceImpl implements UserIAMCommandService {
                                      TokenService tokenService,
                                      PasswordResetNotifier passwordResetNotifier,
                                      ApplicationEventPublisher eventPublisher,
-                                     @Value("${authorization.password-reset.expiration-minutes:30}") long resetTokenMinutes) {
+                                     @Value("${authorization.password-reset.expiration-minutes:30}") long resetTokenMinutes,
+                                     @Value("${peaceapp.bootstrap.first-user-admin:false}") boolean firstUserIsAdmin) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.resetTokenRepository = resetTokenRepository;
@@ -56,6 +59,7 @@ public class UserIAMCommandServiceImpl implements UserIAMCommandService {
         this.passwordResetNotifier = passwordResetNotifier;
         this.eventPublisher = eventPublisher;
         this.resetTokenTtl = Duration.ofMinutes(resetTokenMinutes);
+        this.firstUserIsAdmin = firstUserIsAdmin;
     }
 
     @Override
@@ -64,10 +68,9 @@ public class UserIAMCommandServiceImpl implements UserIAMCommandService {
         if (userRepository.existsByUsername(email.value()))
             throw new EmailAlreadyRegisteredException(email.value());
 
-        // El cliente nunca elige roles: toda cuenta nueva es ROLE_USER.
-        var defaultRole = roleRepository.findByName(Roles.ROLE_USER)
-                .orElseThrow(() -> new IllegalStateException("ROLE_USER no está sembrado"));
-        var user = userRepository.save(new User(email.value(), hashingService.encode(command.password()), List.of(defaultRole)));
+        // El cliente nunca elige roles: toda cuenta nueva es ROLE_USER, salvo el primer registro si el bootstrap está activo.
+        var roles = firstUserIsAdmin && userRepository.count() == 0 ? adminRoles() : List.of(requireRole(Roles.ROLE_USER));
+        var user = userRepository.save(new User(email.value(), hashingService.encode(command.password()), roles));
 
         eventPublisher.publishEvent(new UserRegisteredEvent(
                 user.getId(), email.value(), command.name(), command.lastname(), command.phonenumber()));
@@ -135,15 +138,44 @@ public class UserIAMCommandServiceImpl implements UserIAMCommandService {
 
     @Override
     public boolean handle(SeedAdminCommand command) {
-        var email = EmailAddress.of(command.email());
-        if (userRepository.existsByUsername(email.value())) return false;
-        var roles = List.of(
-                roleRepository.findByName(Roles.ROLE_ADMIN).orElseThrow(() -> new IllegalStateException("ROLE_ADMIN no está sembrado")),
-                roleRepository.findByName(Roles.ROLE_USER).orElseThrow(() -> new IllegalStateException("ROLE_USER no está sembrado")));
-        var user = userRepository.save(new User(email.value(), hashingService.encode(command.password()), roles));
-        eventPublisher.publishEvent(new UserRegisteredEvent(
-                user.getId(), email.value(), command.name(), command.lastname(), null));
+        if (userRepository.existsByUsername(EmailAddress.of(command.email()).value())) return false;
+        createAdmin(command.email(), command.password(), command.name(), command.lastname());
         return true;
+    }
+
+    @Override
+    public User handle(CreateAdminCommand command) {
+        return createAdmin(command.email(), command.password(), command.name(), command.lastname());
+    }
+
+    @Override
+    public User handle(ChangeUserRoleCommand command) {
+        var user = userRepository.findById(command.userId()).orElseThrow(UserNotFoundException::new);
+        if (command.role() == Roles.ROLE_ADMIN) {
+            user.replaceRoles(adminRoles());
+        } else {
+            if (user.hasRole(Roles.ROLE_ADMIN) && userRepository.countByRoles_Name(Roles.ROLE_ADMIN) <= 1)
+                throw new LastAdminException();
+            user.replaceRoles(List.of(requireRole(Roles.ROLE_USER)));
+        }
+        return userRepository.save(user);
+    }
+
+    private User createAdmin(String rawEmail, String password, String name, String lastname) {
+        var email = EmailAddress.of(rawEmail);
+        if (userRepository.existsByUsername(email.value()))
+            throw new EmailAlreadyRegisteredException(email.value());
+        var user = userRepository.save(new User(email.value(), hashingService.encode(password), adminRoles()));
+        eventPublisher.publishEvent(new UserRegisteredEvent(user.getId(), email.value(), name, lastname, null));
+        return user;
+    }
+
+    private List<Role> adminRoles() {
+        return List.of(requireRole(Roles.ROLE_ADMIN), requireRole(Roles.ROLE_USER));
+    }
+
+    private Role requireRole(Roles name) {
+        return roleRepository.findByName(name).orElseThrow(() -> new IllegalStateException(name + " no está sembrado"));
     }
 
     private User findByEmail(String email) {

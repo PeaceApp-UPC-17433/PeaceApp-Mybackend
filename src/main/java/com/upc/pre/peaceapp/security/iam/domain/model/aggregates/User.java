@@ -1,6 +1,7 @@
 package com.upc.pre.peaceapp.security.iam.domain.model.aggregates;
 
 import com.upc.pre.peaceapp.security.iam.domain.model.entities.Role;
+import com.upc.pre.peaceapp.security.iam.domain.model.valueobjects.Roles;
 import com.upc.pre.peaceapp.shared.documentation.models.AuditableAbstractAggregateRoot;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -69,6 +70,17 @@ public class User extends AuditableAbstractAggregateRoot<User> {
     public User addRoles(List<Role> roles) {
         //var validatedRoles = Role.validateRoleSet(roles);
         this.roles.addAll(roles);
+        return this;
+    }
+
+    public boolean hasRole(Roles role) {
+        return roles.stream().anyMatch(r -> r.getName() == role);
+    }
+
+    /** Reemplaza los roles actuales por los indicados. */
+    public User replaceRoles(List<Role> newRoles) {
+        this.roles.clear();
+        this.roles.addAll(newRoles);
         return this;
     }
 }
