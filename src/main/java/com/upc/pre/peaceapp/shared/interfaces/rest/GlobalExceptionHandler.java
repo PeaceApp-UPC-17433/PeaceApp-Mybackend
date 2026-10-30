@@ -8,6 +8,8 @@ import com.upc.pre.peaceapp.community.domain.exceptions.AbuseFlagAlreadyResolved
 import com.upc.pre.peaceapp.community.domain.exceptions.AbuseFlagNotFoundException;
 import com.upc.pre.peaceapp.community.domain.exceptions.CommentNotFoundException;
 import com.upc.pre.peaceapp.community.domain.exceptions.DuplicateAbuseFlagException;
+import com.upc.pre.peaceapp.contacts.domain.exceptions.ContactConflictException;
+import com.upc.pre.peaceapp.contacts.domain.exceptions.ContactNotFoundException;
 import com.upc.pre.peaceapp.notifications.domain.exceptions.NotificationNotFoundException;
 import com.upc.pre.peaceapp.security.iam.domain.exceptions.*;
 import com.upc.pre.peaceapp.shared.domain.exceptions.ForbiddenOperationException;
@@ -52,7 +54,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({UserNotFoundException.class, ProfileNotFoundException.class, ReportNotFoundException.class,
             AlertNotFoundException.class, NotificationNotFoundException.class, CommentNotFoundException.class,
-            AbuseFlagNotFoundException.class})
+            AbuseFlagNotFoundException.class, ContactNotFoundException.class})
     public ResponseEntity<ErrorResource> handleNotFound(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResource.of(ex.getMessage()));
     }
@@ -68,7 +70,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({InvalidReportStatusTransitionException.class, DuplicateAbuseFlagException.class,
-            AbuseFlagAlreadyResolvedException.class})
+            AbuseFlagAlreadyResolvedException.class, ContactConflictException.class})
     public ResponseEntity<ErrorResource> handleConflict(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResource.of(ex.getMessage()));
     }
