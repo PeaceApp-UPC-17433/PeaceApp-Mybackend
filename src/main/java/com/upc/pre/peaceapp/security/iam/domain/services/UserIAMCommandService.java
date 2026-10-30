@@ -19,4 +19,7 @@ public interface UserIAMCommandService {
     void handle(ResetPasswordCommand command);
 
     void handle(DeleteAccountCommand command);
+
+    /** Idempotente: si ya existe una cuenta con ese correo no la toca. Devuelve si creó la cuenta. */
+    boolean handle(SeedAdminCommand command);
 }

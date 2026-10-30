@@ -4,10 +4,13 @@ import com.upc.pre.peaceapp.reports.application.internal.outboundservices.acl.Ex
 import com.upc.pre.peaceapp.reports.domain.exceptions.ReportNotFoundException;
 import com.upc.pre.peaceapp.reports.domain.model.aggregates.Report;
 import com.upc.pre.peaceapp.reports.domain.model.queries.GetHeatmapQuery;
+import com.upc.pre.peaceapp.reports.domain.model.queries.GetReportQualityMetricsQuery;
 import com.upc.pre.peaceapp.reports.domain.model.queries.GetReportByIdQuery;
 import com.upc.pre.peaceapp.reports.domain.model.queries.GetReportsInAreaQuery;
 import com.upc.pre.peaceapp.reports.domain.model.queries.SearchReportsQuery;
 import com.upc.pre.peaceapp.reports.domain.model.valueobjects.HeatCell;
+import com.upc.pre.peaceapp.reports.domain.model.valueobjects.ReportQualityMetrics;
+import com.upc.pre.peaceapp.reports.domain.model.valueobjects.ReportStatus;
 import com.upc.pre.peaceapp.reports.domain.services.ReportQueryService;
 import com.upc.pre.peaceapp.reports.infrastructure.persistence.jpa.repositories.ReportHeatmapRepository;
 import com.upc.pre.peaceapp.reports.infrastructure.persistence.jpa.repositories.ReportRepository;
@@ -18,11 +21,18 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.util.Date;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
 public class ReportQueryServiceImpl implements ReportQueryService {
+    /** Cuántos reportes atendidos (los últimos) entran en el promedio de atención. */
+    private static final int ATTENTION_SAMPLE = 5000;
+
     private final ReportRepository reportRepository;
     private final ReportHeatmapRepository heatmapRepository;
     private final ExternalProfileService externalProfileService;
@@ -37,6 +47,21 @@ public class ReportQueryServiceImpl implements ReportQueryService {
     @Override
     public Report handle(GetReportByIdQuery query) {
         return reportRepository.findById(query.reportId()).orElseThrow(ReportNotFoundException::new);
+    }
+
+    @Override
+    public ReportQualityMetrics handle(GetReportQualityMetricsQuery query) {
+        var counts = new EnumMap<ReportStatus, Long>(ReportStatus.class);
+        for (var status : ReportStatus.values()) counts.put(status, 0L);
+        for (var row : reportRepository.countGroupedByStatus()) counts.put((ReportStatus) row[0], (Long) row[1]);
+
+        var handled = reportRepository.findAttentionDates(
+                EnumSet.of(ReportStatus.VERIFIED, ReportStatus.DISCARDED, ReportStatus.RESOLVED),
+                PageRequest.of(0, ATTENTION_SAMPLE));
+        var averageHours = handled.stream()
+                .mapToDouble(row -> Duration.between(((Date) row[0]).toInstant(), ((Date) row[1]).toInstant()).toMinutes() / 60.0)
+                .average();
+        return new ReportQualityMetrics(counts, averageHours.isPresent() ? averageHours.getAsDouble() : null);
     }
 
     @Override
