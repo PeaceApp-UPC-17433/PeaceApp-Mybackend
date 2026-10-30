@@ -4,31 +4,25 @@ This repository contains the backend implementation for the PeaceApp application
 Java and Spring Boot, providing RESTful services for managing alerts, user profiles, reports, and location data.
 
 ## Features
-- **User Management**: Create and manage user profiles securely.
-- **Alert System**: Allow users to create and respond to alerts.
-- **Location Tracking**: Record and manage user locations.
-- **Incident Reporting**: Manage and view reported incidents.
+- **Identidad y perfil**: registro unificado, inicio de sesión con JWT, recuperación de contraseña y edición del perfil.
+- **Reportes y mapa**: reportes con tipo, severidad y estado, filtros, paginación, consulta por área y mapa de calor.
+- **Alertas y notificaciones**: avisos por proximidad, historial, preferencias y push por puerto.
+- **Comunidad y moderación**: comentarios, votos de confirmación, verificación, denuncias de abuso y panel de administración.
 
 ## Project Structure
-The project follows a standard Maven-based Spring Boot structure with a clear separation of concerns:
+El proyecto sigue DDD con un bounded context por carpeta. Cada contexto repite las mismas capas
+(`domain`, `application`, `infrastructure`, `interfaces/rest`) y se comunica con los demás por eventos de dominio
+o por una capa anticorrupción (`application/internal/outboundservices/acl`).
 
-- **Application Entry Point**:
-  - `PeaceappApplication.java`: Main class that bootstraps the Spring Boot application.
+Bajo `src/main/java/com/upc/pre/peaceapp`:
 
-- **Controllers** (`src/main/java/com/upc/pre/peaceapp/controllers`):
-  - `AlertController.java`: Handles HTTP requests related to alerts.
-  - `LocationController.java`: Manages location-related requests.
-  - `ReportController.java`: Handles all operations related to reports.
-  - `UserController.java`: Manages user-related requests.
-
-- **Models** (`src/main/java/com/upc/pre/peaceapp/models`):
-  - Classes representing the entities of the application, such as `UserProfile`, `Alert`, `Location`, and `Report`.
-
-- **Repositories** (`src/main/java/com/upc/pre/peaceapp/repositories`):
-  - Interfaces extending `JpaRepository` for CRUD operations on the entities.
-
-- **Resources** (`src/main/resources`):
-  - `application.properties`: Defines configuration settings such as database connection, server ports, etc.
+- `security/iam`: cuentas, roles, JWT y recuperación de contraseña.
+- `controllers`, `models`, `repositories`, `services`: perfil de usuario (contexto anterior a la migración a DDD).
+- `reports`: agregado `Report`, mapa y mapa de calor. `/locations` es una vista de compatibilidad.
+- `alerts`: alertas por proximidad y su configuración.
+- `notifications`: avisos dentro de la app, preferencias y dispositivos push.
+- `community`: comentarios, votos, denuncias, historial de moderación y métricas.
+- `shared`: manejo uniforme de errores, paginación y documentación OpenAPI.
 
 ## Getting Started
 
@@ -238,7 +232,64 @@ Notas:
 
 ### Fase 4: Comunidad y confianza
 
-Estado: pendiente.
+Estado: implementada. Rama: `feature/report-comments-votes`.
+
+Bounded context nuevo, `community/`, con las mismas capas que IAM. Tiene cuatro agregados: `ReportComment`, `ReportVote`, `AbuseFlag` y `ModerationAction`. Consulta a `reports/` solo por su ACL (`ExternalReportService`) y se comunica con él por eventos:
+
+1. `PUT /reports/{id}/vote` guarda el voto. Si las confirmaciones netas (confirmaciones menos dudas) llegan al umbral, publica `ReportConfirmedByCommunityEvent`.
+2. `reports/` reacciona (después de confirmar la transacción, en una propia) y pasa el reporte a `VERIFIED`, pero solo si seguía en `PENDING` o `UNDER_REVIEW`.
+3. Al borrar un reporte, `reports/` publica `ReportDeletedEvent` y `community/` borra en la misma transacción sus comentarios, votos y denuncias. El historial de moderación se conserva.
+
+Todos los endpoints piden token. Quien actúa sale del token.
+
+| Método | Ruta | Qué hace | Quién | Respuestas |
+|---|---|---|---|---|
+| POST | `/api/v1/reports/{id}/comments` | Comenta un reporte | Cualquier usuario | `201`, `400`, `404` |
+| GET | `/api/v1/reports/{id}/comments` | Comentarios visibles, paginados, del más antiguo al más nuevo | Cualquier usuario | `200`, `404` |
+| DELETE | `/api/v1/comments/{id}` | Retira un comentario (borrado lógico) | Autor o admin | `204`, `403`, `404` |
+| PUT | `/api/v1/reports/{id}/vote` | Crea o cambia mi voto (`CONFIRM` o `DISPUTE`) | Cualquier usuario menos el dueño del reporte | `200`, `400`, `403`, `404` |
+| DELETE | `/api/v1/reports/{id}/vote` | Retira mi voto (idempotente) | Cualquier usuario | `200`, `404` |
+| GET | `/api/v1/reports/{id}/votes` | Conteos, mi voto y umbral de verificación | Cualquier usuario | `200`, `404` |
+| POST | `/api/v1/reports/{id}/flag` | Denuncia un reporte | Cualquier usuario menos el dueño | `201`, `400`, `403`, `404`, `409` ya denunciado |
+| POST | `/api/v1/comments/{id}/flag` | Denuncia un comentario | Cualquier usuario menos el autor | `201`, `400`, `403`, `404`, `409` |
+| GET | `/api/v1/admin/flags` | Denuncias, las más nuevas primero. Filtro `status` (`OPEN`, `DISMISSED`, `ACTION_TAKEN`) | Solo admin | `200`, `403` |
+| PUT | `/api/v1/admin/flags/{id}/resolve` | Resuelve una denuncia | Solo admin | `200`, `400`, `403`, `404`, `409` ya resuelta |
+| GET | `/api/v1/admin/moderation-log` | Historial de acciones de moderación | Solo admin | `200`, `403` |
+| GET | `/api/v1/admin/metrics` | Métricas de calidad | Solo admin | `200`, `403` |
+
+**Cuerpos de petición**
+
+| Endpoint | Campos |
+|---|---|
+| comentario | `text` (obligatorio, máx. 500) |
+| voto | `type` (`CONFIRM` o `DISPUTE`) |
+| denuncia | `reason` (`SPAM`, `FALSE_INFORMATION`, `OFFENSIVE`, `DUPLICATE`, `OTHER`), `details` (opcional, máx. 255) |
+| resolver denuncia | `resolution` (`DISMISSED` o `ACTION_TAKEN`), `note` (opcional, máx. 255) |
+
+**Reglas**
+- Un usuario tiene un solo voto por reporte; volver a votar lo reemplaza. No se vota un reporte propio ni uno ya descartado o resuelto.
+- Un usuario denuncia un contenido una sola vez y no puede denunciar el suyo.
+- `ACTION_TAKEN` sobre un comentario lo retira. Sobre un reporte lo pasa a `DISCARDED` (si ya estaba descartado o resuelto no cambia). Las demás denuncias abiertas sobre el mismo contenido se cierran con la misma resolución. `DISMISSED` no toca el contenido.
+- Cada resolución, y cada comentario ajeno que borra un admin, queda en el historial de moderación (`COMMENT_REMOVED`, `REPORT_DISCARDED`, `FLAG_DISMISSED`).
+
+**Respuesta de `GET /reports/{id}/votes`**: `confirmations`, `disputes`, `net`, `myVote` (nulo si no votaste) y `verificationThreshold`.
+
+**Respuesta de `GET /admin/metrics`**: `reports` (`total`, `byStatus`, `verified` incluye resueltos, `discarded`, `verifiedRate`, `averageAttentionHours`), `community` (`comments`, `confirmations`, `disputes`) y `flags` (`open`, `dismissed`, `actionTaken`, `total`, `actionRate`). Las tasas y el promedio son `null` mientras no haya datos. El tiempo de atención es la diferencia entre la creación y el último cambio de los reportes verificados, descartados o resueltos (últimos 5000).
+
+**Configuración**
+
+| Propiedad | Por defecto | Qué hace |
+|---|---|---|
+| `community.verification.confirmation-threshold` | `3` | Confirmaciones netas que verifican un reporte |
+| `peaceapp.admin.email` / `peaceapp.admin.password` | vacío (variables `ADMIN_EMAIL` y `ADMIN_PASSWORD`) | Si se definen, al arrancar se crea esa cuenta con `ROLE_ADMIN` (y su perfil) cuando no existe. La contraseña necesita al menos 8 caracteres |
+
+**Cambios que rompen compatibilidad con el frontend**: ninguno. Los endpoints son nuevos y los existentes no cambian.
+
+Notas:
+- Ya hay forma de crear un administrador: la siembra de arriba. No hay rol de moderador aparte; la moderación es de `ROLE_ADMIN`.
+- Quedan fuera de esta fase la suspensión de usuarios y la reputación. Van con los roles de la Fase 5.
+- Los comentarios retirados siguen en la base (borrado lógico) para que las denuncias y el historial tengan a qué apuntar.
+- Si el voto que alcanza el umbral se guarda pero falla la verificación, el error queda en el log y el reporte sigue como estaba.
 
 ### Fase 5: Funciones avanzadas
 
