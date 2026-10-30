@@ -70,7 +70,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({InvalidReportStatusTransitionException.class, DuplicateAbuseFlagException.class,
-            AbuseFlagAlreadyResolvedException.class, ContactConflictException.class})
+            AbuseFlagAlreadyResolvedException.class, ContactConflictException.class, LastAdminException.class})
     public ResponseEntity<ErrorResource> handleConflict(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResource.of(ex.getMessage()));
     }

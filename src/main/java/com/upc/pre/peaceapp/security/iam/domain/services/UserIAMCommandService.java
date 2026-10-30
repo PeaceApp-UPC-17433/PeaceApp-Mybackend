@@ -22,4 +22,10 @@ public interface UserIAMCommandService {
 
     /** Idempotente: si ya existe una cuenta con ese correo no la toca. Devuelve si creó la cuenta. */
     boolean handle(SeedAdminCommand command);
+
+    /** Crea una cuenta con ROLE_ADMIN y ROLE_USER, y su perfil. Falla si el correo ya está registrado. */
+    User handle(CreateAdminCommand command);
+
+    /** Cambia el rol de una cuenta. No permite dejar el sistema sin administradores. */
+    User handle(ChangeUserRoleCommand command);
 }
