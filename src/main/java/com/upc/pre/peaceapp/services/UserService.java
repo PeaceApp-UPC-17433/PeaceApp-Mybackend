@@ -1,6 +1,7 @@
 package com.upc.pre.peaceapp.services;
 
 import com.upc.pre.peaceapp.models.UserProfile;
+import com.upc.pre.peaceapp.profile.ProfileDeletedEvent;
 import com.upc.pre.peaceapp.profile.ProfileNotFoundException;
 import com.upc.pre.peaceapp.repositories.UserRepository;
 import com.upc.pre.peaceapp.schemas.UpdateUserProfileSchema;
@@ -11,6 +12,7 @@ import com.upc.pre.peaceapp.security.iam.domain.model.events.UserRegisteredEvent
 import com.upc.pre.peaceapp.security.iam.domain.model.valueobjects.EmailAddress;
 import com.upc.pre.peaceapp.security.iam.domain.services.UserIAMCommandService;
 import com.upc.pre.peaceapp.shared.domain.exceptions.ForbiddenOperationException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +28,13 @@ public class UserService {
 
     private final UserRepository repository;
     private final UserIAMCommandService userIAMCommandService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public UserService(UserRepository repository, UserIAMCommandService userIAMCommandService) {
+    public UserService(UserRepository repository, UserIAMCommandService userIAMCommandService,
+                       ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.userIAMCommandService = userIAMCommandService;
+        this.eventPublisher = eventPublisher;
     }
 
     /** Reacción a {@link UserRegisteredEvent}: corre dentro de la transacción del registro. */
@@ -68,6 +73,7 @@ public class UserService {
         var profile = findOwned(id, requesterEmail, admin);
         userIAMCommandService.handle(new DeleteAccountCommand(profile.getEmail()));
         repository.delete(profile);
+        eventPublisher.publishEvent(new ProfileDeletedEvent(profile.getId()));
     }
 
     /** Id del perfil asociado a un correo; lo usan otros contextos para identificar a quien actúa. */

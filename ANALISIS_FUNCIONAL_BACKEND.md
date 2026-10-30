@@ -402,6 +402,8 @@ Objetivo: que el usuario reciba avisos útiles cuando esté cerca de una zona de
 
 Objetivo: que los reportes sean más confiables y que la comunidad participe.
 
+Estado: implementada (ver `README.md`, sección "API por fases"). Quedan fuera la suspensión de usuarios y la reputación, que se trasladan a la Fase 5 junto con los roles.
+
 - Comentarios.
 - Confirmaciones.
 - Verificación.
@@ -414,10 +416,13 @@ Objetivo: que los reportes sean más confiables y que la comunidad participe.
 
 Objetivo: completar la visión del producto.
 
+Estado: cerrada con alcance reducido (ver `README.md`, sección "API por fases"). Por ser un proyecto académico solo se implementaron los contactos de confianza; el resto de esta lista queda fuera del alcance, igual que planes, suscripciones, pagos y el push real al teléfono.
+
+- Contactos de confianza (hecho).
 - Compartir ubicación con contactos.
-- Contactos de confianza.
+- Alertas de emergencia y a contactos de confianza.
+- Suspensión de usuarios, rol moderador y reputación (trasladados de la Fase 4).
 - Rutas seguras.
-- Planes o suscripciones, si se mantienen en el alcance.
 - Analítica y exportación.
 - Preferencias de idioma y tema.
 

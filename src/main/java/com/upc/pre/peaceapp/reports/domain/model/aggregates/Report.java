@@ -1,6 +1,8 @@
 package com.upc.pre.peaceapp.reports.domain.model.aggregates;
 
 import com.upc.pre.peaceapp.reports.domain.exceptions.InvalidReportStatusTransitionException;
+import com.upc.pre.peaceapp.reports.domain.model.events.ReportCreatedEvent;
+import com.upc.pre.peaceapp.reports.domain.model.events.ReportDeletedEvent;
 import com.upc.pre.peaceapp.reports.domain.model.valueobjects.GeoPoint;
 import com.upc.pre.peaceapp.reports.domain.model.valueobjects.ReportCategory;
 import com.upc.pre.peaceapp.reports.domain.model.valueobjects.ReportSeverity;
@@ -79,6 +81,16 @@ public class Report extends AuditableAbstractAggregateRoot<Report> {
         this.image = optionalText(image, "La imagen", IMAGE_MAX);
     }
 
+    /** Anuncia la creación. Se llama tras el primer guardado, cuando el reporte ya tiene id. */
+    public void announceCreation() {
+        registerEvent(new ReportCreatedEvent(getId(), reporterId, title, category, severity, location));
+    }
+
+    /** Anuncia el borrado. Se llama justo antes de eliminar el reporte. */
+    public void announceDeletion() {
+        registerEvent(new ReportDeletedEvent(getId()));
+    }
+
     /** Edición parcial: un valor nulo deja el campo como está. */
     public void edit(String title, String detail, ReportCategory category, ReportSeverity severity,
                      Instant occurredAt, GeoPoint location, String address, String image) {
@@ -96,6 +108,16 @@ public class Report extends AuditableAbstractAggregateRoot<Report> {
         if (next == null) throw new IllegalArgumentException("El estado es obligatorio");
         if (!status.canTransitionTo(next)) throw new InvalidReportStatusTransitionException(status, next);
         this.status = next;
+    }
+
+    /**
+     * Verificación por confirmación de la comunidad. Solo avanza reportes que aún no se revisaron o están en revisión;
+     * en cualquier otro estado no hace nada. Devuelve si cambió el estado.
+     */
+    public boolean verifyByCommunity() {
+        if (status != ReportStatus.PENDING && status != ReportStatus.UNDER_REVIEW) return false;
+        changeStatus(ReportStatus.VERIFIED);
+        return true;
     }
 
     public boolean isOwnedBy(Long profileId) {

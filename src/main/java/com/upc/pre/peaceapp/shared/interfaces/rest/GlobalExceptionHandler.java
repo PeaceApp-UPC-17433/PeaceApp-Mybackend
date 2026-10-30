@@ -3,6 +3,14 @@ package com.upc.pre.peaceapp.shared.interfaces.rest;
 import com.upc.pre.peaceapp.profile.ProfileNotFoundException;
 import com.upc.pre.peaceapp.reports.domain.exceptions.InvalidReportStatusTransitionException;
 import com.upc.pre.peaceapp.reports.domain.exceptions.ReportNotFoundException;
+import com.upc.pre.peaceapp.alerts.domain.exceptions.AlertNotFoundException;
+import com.upc.pre.peaceapp.community.domain.exceptions.AbuseFlagAlreadyResolvedException;
+import com.upc.pre.peaceapp.community.domain.exceptions.AbuseFlagNotFoundException;
+import com.upc.pre.peaceapp.community.domain.exceptions.CommentNotFoundException;
+import com.upc.pre.peaceapp.community.domain.exceptions.DuplicateAbuseFlagException;
+import com.upc.pre.peaceapp.contacts.domain.exceptions.ContactConflictException;
+import com.upc.pre.peaceapp.contacts.domain.exceptions.ContactNotFoundException;
+import com.upc.pre.peaceapp.notifications.domain.exceptions.NotificationNotFoundException;
 import com.upc.pre.peaceapp.security.iam.domain.exceptions.*;
 import com.upc.pre.peaceapp.shared.domain.exceptions.ForbiddenOperationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -44,7 +52,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ErrorResource.of(ex.getMessage()));
     }
 
-    @ExceptionHandler({UserNotFoundException.class, ProfileNotFoundException.class, ReportNotFoundException.class})
+    @ExceptionHandler({UserNotFoundException.class, ProfileNotFoundException.class, ReportNotFoundException.class,
+            AlertNotFoundException.class, NotificationNotFoundException.class, CommentNotFoundException.class,
+            AbuseFlagNotFoundException.class, ContactNotFoundException.class})
     public ResponseEntity<ErrorResource> handleNotFound(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResource.of(ex.getMessage()));
     }
@@ -59,8 +69,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ErrorResource.of("El parámetro " + ex.getName() + " no es válido"));
     }
 
-    @ExceptionHandler(InvalidReportStatusTransitionException.class)
-    public ResponseEntity<ErrorResource> handleInvalidTransition(InvalidReportStatusTransitionException ex) {
+    @ExceptionHandler({InvalidReportStatusTransitionException.class, DuplicateAbuseFlagException.class,
+            AbuseFlagAlreadyResolvedException.class, ContactConflictException.class})
+    public ResponseEntity<ErrorResource> handleConflict(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResource.of(ex.getMessage()));
     }
 

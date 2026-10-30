@@ -133,6 +133,19 @@ public class UserIAMCommandServiceImpl implements UserIAMCommandService {
         userRepository.delete(user); // la tabla user_roles se limpia por la relación ManyToMany
     }
 
+    @Override
+    public boolean handle(SeedAdminCommand command) {
+        var email = EmailAddress.of(command.email());
+        if (userRepository.existsByUsername(email.value())) return false;
+        var roles = List.of(
+                roleRepository.findByName(Roles.ROLE_ADMIN).orElseThrow(() -> new IllegalStateException("ROLE_ADMIN no está sembrado")),
+                roleRepository.findByName(Roles.ROLE_USER).orElseThrow(() -> new IllegalStateException("ROLE_USER no está sembrado")));
+        var user = userRepository.save(new User(email.value(), hashingService.encode(command.password()), roles));
+        eventPublisher.publishEvent(new UserRegisteredEvent(
+                user.getId(), email.value(), command.name(), command.lastname(), null));
+        return true;
+    }
+
     private User findByEmail(String email) {
         return userRepository.findByUsername(EmailAddress.of(email).value())
                 .orElseThrow(UserNotFoundException::new);
