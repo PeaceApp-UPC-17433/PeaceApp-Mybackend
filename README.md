@@ -8,6 +8,7 @@ Java and Spring Boot, providing RESTful services for managing alerts, user profi
 - **Reportes y mapa**: reportes con tipo, severidad y estado, filtros, paginación, consulta por área y mapa de calor.
 - **Alertas y notificaciones**: avisos por proximidad, historial, preferencias y push por puerto.
 - **Comunidad y moderación**: comentarios, votos de confirmación, verificación, denuncias de abuso y panel de administración.
+- **Funciones avanzadas**: contactos de confianza.
 
 ## Project Structure
 El proyecto sigue DDD con un bounded context por carpeta. Cada contexto repite las mismas capas
@@ -22,6 +23,7 @@ Bajo `src/main/java/com/upc/pre/peaceapp`:
 - `alerts`: alertas por proximidad y su configuración.
 - `notifications`: avisos dentro de la app, preferencias y dispositivos push.
 - `community`: comentarios, votos, denuncias, historial de moderación y métricas.
+- `contacts`: contactos de confianza (solicitudes, aceptación y bloqueo).
 - `shared`: manejo uniforme de errores, paginación y documentación OpenAPI.
 
 ## Getting Started
@@ -293,4 +295,47 @@ Notas:
 
 ### Fase 5: Funciones avanzadas
 
-Estado: pendiente.
+Estado: cerrada con alcance reducido. Rama de integración: `epic/phase-5-advanced-features`.
+
+Alcance: solo los contactos de confianza (5.1). El equipo decidió dejar fuera, por ser un proyecto académico, planes, suscripciones y pagos, compartir ubicación, SOS, preferencias de idioma y tema, suspensión de usuarios y rol moderador, analítica y exportación, y rutas seguras. El push al teléfono tampoco se implementa: queda el adaptador de log, y un fallo de envío nunca afecta a la petición.
+
+| Paso | Contenido | Estado |
+|---|---|---|
+| 5.1 | Contactos de confianza (`contacts/`) | Hecho |
+| 5.2 | Compartir ubicación (`sharing/`) | Fuera de alcance |
+| 5.3 | SOS y alertas a contactos | Fuera de alcance |
+| 5.4 | Preferencias de idioma y tema | Fuera de alcance |
+| 5.5 | Suspensión, rol moderador y reputación | Fuera de alcance |
+| 5.6 | Analítica y exportación | Fuera de alcance |
+| 5.7 | Rutas seguras | Fuera de alcance |
+
+#### 5.1 Contactos de confianza
+
+Rama: `feature/trusted-contacts`. Bounded context nuevo, `contacts/`, con las mismas capas que IAM. El agregado `TrustedContact` es una relación única por pareja de perfiles (da igual quién la inició): nace `PENDING`, el destinatario la pasa a `ACCEPTED` y cualquiera de los dos puede pasarla a `BLOCKED`. Se comunica por eventos:
+
+1. `ContactRequestedEvent` y `ContactAcceptedEvent` (después de confirmar la transacción): `notifications/` avisa al otro usuario (`CONTACT_REQUEST` y `CONTACT_ACCEPTED`).
+2. `ProfileDeletedEvent` (la publica el borrado de perfil): `contacts/` elimina las relaciones del perfil en la misma transacción.
+3. Otros contextos (5.2 y 5.3) obtienen los contactos aceptados con `GetAcceptedContactProfileIdsQuery`, por su propia ACL.
+
+Todos los endpoints piden token y trabajan sobre el usuario del token.
+
+| Método | Ruta | Qué hace | Respuestas |
+|---|---|---|---|
+| GET | `/api/v1/contacts` | Mis contactos aceptados | `200` |
+| GET | `/api/v1/contacts/requests/incoming` | Solicitudes que me enviaron | `200` |
+| GET | `/api/v1/contacts/requests/outgoing` | Solicitudes que envié y siguen pendientes | `200` |
+| GET | `/api/v1/contacts/blocked` | Personas que bloqueé | `200` |
+| POST | `/api/v1/contacts/requests` | Envía una solicitud por correo (`{ "email": "..." }`) | `201`, `400` correo inválido o el propio, `404` no existe, `409` ya hay una relación |
+| PUT | `/api/v1/contacts/{id}/accept` | Acepta una solicitud recibida | `204`, `403` no eres el destinatario, `404`, `409` ya no está pendiente |
+| PUT | `/api/v1/contacts/{id}/decline` | Rechaza una solicitud recibida (la elimina; se puede volver a enviar) | `204`, `403`, `404`, `409` |
+| PUT | `/api/v1/contacts/{id}/block` | Bloquea la relación | `204`, `404`, `409` ya bloqueada |
+| DELETE | `/api/v1/contacts/{id}` | Quita un contacto, cancela una solicitud propia o deshace un bloqueo propio | `204`, `403` el bloqueo es de la otra persona, `404` |
+
+`{id}` es el id de la relación (campo `id` de las listas), no el del perfil. Cada elemento trae `id`, `profileId`, `name`, `lastname`, `email` (del otro usuario), `status` (`PENDING`, `ACCEPTED`, `BLOCKED`), `initiatedByMe`, `createdAt` y `respondedAt`.
+
+**Reglas**
+- No se puede pedir contacto a uno mismo. Si ya hay una solicitud pendiente (en cualquier sentido), una relación aceptada o un bloqueo, responde `409`.
+- Quien no participa en una relación recibe `404`, como si no existiera.
+- Quien fue bloqueado no ve el bloqueo (no aparece en sus listas) y no puede volver a enviar solicitudes.
+
+**Cambios que rompen compatibilidad con el frontend**: ninguno. `NotificationKind` suma `CONTACT_REQUEST` y `CONTACT_ACCEPTED`, que también se pueden desactivar en `PUT /notifications/preferences`.
