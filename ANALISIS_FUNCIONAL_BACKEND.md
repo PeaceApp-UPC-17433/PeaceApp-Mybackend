@@ -402,6 +402,8 @@ Objetivo: que el usuario reciba avisos útiles cuando esté cerca de una zona de
 
 Objetivo: que los reportes sean más confiables y que la comunidad participe.
 
+Estado: implementada (ver `README.md`, sección "API por fases"). Quedan fuera la suspensión de usuarios y la reputación, que se trasladan a la Fase 5 junto con los roles.
+
 - Comentarios.
 - Confirmaciones.
 - Verificación.

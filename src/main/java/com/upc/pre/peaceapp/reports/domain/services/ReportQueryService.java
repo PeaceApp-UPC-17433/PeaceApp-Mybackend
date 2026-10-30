@@ -2,10 +2,12 @@ package com.upc.pre.peaceapp.reports.domain.services;
 
 import com.upc.pre.peaceapp.reports.domain.model.aggregates.Report;
 import com.upc.pre.peaceapp.reports.domain.model.queries.GetHeatmapQuery;
+import com.upc.pre.peaceapp.reports.domain.model.queries.GetReportQualityMetricsQuery;
 import com.upc.pre.peaceapp.reports.domain.model.queries.GetReportByIdQuery;
 import com.upc.pre.peaceapp.reports.domain.model.queries.GetReportsInAreaQuery;
 import com.upc.pre.peaceapp.reports.domain.model.queries.SearchReportsQuery;
 import com.upc.pre.peaceapp.reports.domain.model.valueobjects.HeatCell;
+import com.upc.pre.peaceapp.reports.domain.model.valueobjects.ReportQualityMetrics;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
@@ -17,6 +19,9 @@ public interface ReportQueryService {
 
     /** Reportes dentro del área visible, del más reciente al más antiguo y con un tope de resultados. */
     List<Report> handle(GetReportsInAreaQuery query);
+
+    /** Totales por estado y tiempo promedio de atención, para el panel de administración. */
+    ReportQualityMetrics handle(GetReportQualityMetricsQuery query);
 
     /** Solo cuenta reportes activos (ni descartados ni resueltos). */
     List<HeatCell> handle(GetHeatmapQuery query);

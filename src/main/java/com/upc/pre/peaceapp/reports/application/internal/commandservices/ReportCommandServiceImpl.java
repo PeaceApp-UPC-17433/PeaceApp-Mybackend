@@ -7,10 +7,12 @@ import com.upc.pre.peaceapp.reports.domain.model.commands.ChangeReportStatusComm
 import com.upc.pre.peaceapp.reports.domain.model.commands.CreateReportCommand;
 import com.upc.pre.peaceapp.reports.domain.model.commands.DeleteReportCommand;
 import com.upc.pre.peaceapp.reports.domain.model.commands.UpdateReportCommand;
+import com.upc.pre.peaceapp.reports.domain.model.commands.VerifyReportByCommunityCommand;
 import com.upc.pre.peaceapp.reports.domain.services.ReportCommandService;
 import com.upc.pre.peaceapp.reports.infrastructure.persistence.jpa.repositories.ReportRepository;
 import com.upc.pre.peaceapp.shared.domain.exceptions.ForbiddenOperationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -52,10 +54,20 @@ public class ReportCommandServiceImpl implements ReportCommandService {
         return reportRepository.save(report);
     }
 
+    /** Transacción propia: la invoca un listener AFTER_COMMIT, donde la transacción original ya no confirma cambios. */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handle(VerifyReportByCommunityCommand command) {
+        reportRepository.findById(command.reportId()).ifPresent(report -> {
+            if (report.verifyByCommunity()) reportRepository.save(report);
+        });
+    }
+
     @Override
     public void handle(DeleteReportCommand command) {
         var report = findReport(command.reportId());
         assertCanManage(report, command.requesterEmail(), command.admin());
+        report.announceDeletion();
         reportRepository.delete(report);
     }
 
